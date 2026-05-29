@@ -1,0 +1,61 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: cotisations_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: EspaceMembreDB
+    volumes:
+      - ./db/espacemembre.sql:/docker-entrypoint-initdb.d/espacemembre.sql
+      - db_data:/var/lib/mysql
+    networks:
+      - cotisations_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpass"]
+      interval: 20s      # Attendre 20s entre chaque test
+      timeout: 10s       # Laisser 10s à MySQL pour répondre
+      retries: 10        # Essayer 10 fois (soit 200 secondes de battement !)
+      start_period: 60s  # Ignorer les échecs pendant la 1ère minute
+
+  php:
+    build:
+      context: .           # Le contexte est maintenant la racine du projet
+      dockerfile: ./php/Dockerfile  # Le chemin vers le fichier Dockerfile
+    container_name: cotisations_php
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cotisations_network
+
+  nginx:
+    build:
+      context: .
+      dockerfile: ./nginx/Dockerfile
+    container_name: cotisations_nginx
+    restart: always
+    ports:
+      - "8081:80" 
+    depends_on:
+      - php
+    networks:
+      - cotisations_network
+  mailhog:
+    image: mailhog/mailhog
+    container_name: cotisations_mailhog
+    ports:
+      - "1025:1025" # Port SMTP (pour l'envoi)
+      - "8025:8025" # Port Web UI (pour voir les mails)
+    networks:
+      - cotisations_network
+      
+networks:
+  cotisations_network:
+    driver: bridge
+
+volumes:
+  db_data:
+
+ 
